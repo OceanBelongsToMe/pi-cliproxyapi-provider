@@ -181,11 +181,30 @@ Project config reads `metadataFallbackProvider`, `modelAliases`, and `modelOverr
 }
 ```
 
+### Compatibility overrides
+
+`modelOverrides` entries also accept a `compat` object that overrides the boolean compatibility flags Pi publishes for a model. This is useful for OpenAI-compatible upstreams that reject parameters Pi sends by default; for example, DashScope-style endpoints reject the `developer` role and `reasoning_effort`:
+
+```json
+{
+  "modelOverrides": {
+    "qwen3.8-max": {
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false
+      }
+    }
+  }
+}
+```
+
+Allowed `compat` fields are the boolean OpenAI-completions compatibility flags: `supportsStore`, `supportsDeveloperRole`, `supportsReasoningEffort`, `supportsUsageInStreaming`, `supportsFinishReason`, `requiresToolResultName`, `requiresAssistantAfterToolResult`, `requiresThinkingAsText`, `requiresReasoningContentOnAssistantMessages`, `supportsThinkingTokenBudget`, `supportsOpenAIGrammarTools`, `supportsLongCacheRetention`, `sendSessionAffinityHeaders`, and `zaiToolStream`. `supportsStrictMode` stays provider-owned and cannot be overridden. In project config, set a `compat` field to `null` to clear it, or set `"compat": null` to clear the whole compat override.
+
 ## Model inspector and overrides
 
 Run `/cliproxyapi models` in Pi TUI mode to inspect the models in the current CPA snapshot. The selector shows the effective API, reasoning mode, and context window. The detail view also shows input modalities, cost, thinking levels, and the compatibility values that Pi will publish.
 
-Only `reasoning`, `contextWindow`, and `maxTokens` are editable. Values are constrained to safe presets; choose `auto` to remove an override and restore the derived value after reload. API routing and compatibility stay provider-owned: GPT-5.6/Codex models remain on `openai-responses`, while the CLIProxyAPI workaround publishes `supportsStrictMode: false`.
+Only `reasoning`, `contextWindow`, and `maxTokens` are editable in the inspector. Values are constrained to safe presets; choose `auto` to remove an override and restore the derived value after reload. `compat` overrides are maintained in the config file (see Compatibility overrides) and are preserved when the inspector saves. API routing stays provider-owned: GPT-5.6/Codex models remain on `openai-responses`, while the CLIProxyAPI workaround publishes `supportsStrictMode: false`.
 
 For CPA Responses requests, the extension also applies the Codex-compatible function-tool wire contract used by `pi-codex-conversion`: each function tool explicitly carries `strict: null`. This preserves optional tool arguments such as `interactive_shell.listBackground` without replacing CPA authentication, transport, discovery, or streaming with the ChatGPT-backed `openai-codex-responses` provider.
 

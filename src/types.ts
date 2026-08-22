@@ -3,16 +3,48 @@ import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 
 export type InputModality = "text" | "image";
 
+/**
+ * Boolean compatibility flags accepted in `modelOverrides[].compat`.
+ * Mirrors the boolean fields of pi's OpenAI completions compat settings.
+ * `supportsStrictMode` stays provider-owned and is intentionally excluded.
+ */
+export const COMPAT_OVERRIDE_FIELDS = [
+  "supportsStore",
+  "supportsDeveloperRole",
+  "supportsReasoningEffort",
+  "supportsUsageInStreaming",
+  "supportsFinishReason",
+  "requiresToolResultName",
+  "requiresAssistantAfterToolResult",
+  "requiresThinkingAsText",
+  "requiresReasoningContentOnAssistantMessages",
+  "supportsThinkingTokenBudget",
+  "supportsOpenAIGrammarTools",
+  "supportsLongCacheRetention",
+  "sendSessionAffinityHeaders",
+  "zaiToolStream",
+] as const;
+
+export type CompatOverrideField = (typeof COMPAT_OVERRIDE_FIELDS)[number];
+
+export type CompatOverride = Partial<Record<CompatOverrideField, boolean>>;
+
+/** Layer variant where `null` clears a field (project scope). */
+export type CompatOverrideLayer = Partial<Record<CompatOverrideField, boolean | null>>;
+
 export interface ProviderModelOverride {
   reasoning?: boolean;
   contextWindow?: number;
   maxTokens?: number;
+  compat?: CompatOverride;
 }
 
 export interface ProviderModelOverrideLayer {
   reasoning?: boolean | null;
   contextWindow?: number | null;
   maxTokens?: number | null;
+  /** `null` clears the whole compat override (project scope). */
+  compat?: CompatOverrideLayer | null;
 }
 
 export type ProviderModelOverrides = Record<string, ProviderModelOverride>;

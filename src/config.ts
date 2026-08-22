@@ -2,12 +2,15 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type {
+  CompatOverride,
+  CompatOverrideLayer,
   CpaProviderConfig,
   ProviderModelOverride,
   ProviderModelOverrideLayer,
   ProviderModelOverrideLayers,
   ProviderModelOverrides,
 } from "./types.ts";
+import { COMPAT_OVERRIDE_FIELDS } from "./types.ts";
 
 export type ConfigLayer = Partial<CpaProviderConfig>;
 
@@ -73,6 +76,21 @@ function safeProjectConfig(projectConfig?: ConfigLayer): ConfigLayer | undefined
   };
 }
 
+function mergeCompatOverrides(
+  base: CompatOverride | undefined,
+  layer: CompatOverrideLayer | null | undefined,
+): CompatOverride | undefined {
+  if (layer === null) return undefined;
+  if (!layer) return base;
+  const merged: CompatOverride = { ...base };
+  for (const field of COMPAT_OVERRIDE_FIELDS) {
+    const value = layer[field];
+    if (value === null) delete merged[field];
+    else if (value !== undefined) merged[field] = value;
+  }
+  return Object.keys(merged).length === 0 ? undefined : merged;
+}
+
 function mergeModelOverrides(
   base: ProviderModelOverrides,
   layer: ProviderModelOverrideLayers | undefined,
@@ -86,6 +104,9 @@ function mergeModelOverrides(
       if (value === null) delete next[field];
       else if (value !== undefined) (next as Record<string, boolean | number>)[field] = value;
     }
+    const compat = mergeCompatOverrides(next.compat, override.compat);
+    if (compat === undefined) delete next.compat;
+    else next.compat = compat;
     if (Object.keys(next).length === 0) delete merged[modelId];
     else merged[modelId] = next;
   }
@@ -175,7 +196,7 @@ function parseModelOverrides(value: unknown, scope: string): ProviderModelOverri
 
     const record = rawOverride as Record<string, unknown>;
     const unknown = Object.keys(record).filter(
-      (key) => key !== "reasoning" && key !== "contextWindow" && key !== "maxTokens",
+      (key) => key !== "reasoning" && key !== "contextWindow" && key !== "maxTokens" && key !== "compat",
     );
     if (unknown.length > 0) {
       throw new Error(`modelOverrides.${modelId} contains unsupported fields: ${unknown.join(", ")}`);
@@ -191,12 +212,50 @@ function parseModelOverrides(value: unknown, scope: string): ProviderModelOverri
         throw new Error(`modelOverrides.${modelId}.${field} must be one of ${presets[field].join(", ")}${nullable ? " or null" : ""} in ${scope} config file`);
       }
     }
+    const compat = record.compat === undefined
+      ? undefined
+      : parseCompatOverride(modelId, record.compat, scope);
 
     parsed[modelId] = {
       ...(record.reasoning !== undefined ? { reasoning: record.reasoning as boolean | null } : {}),
       ...(record.contextWindow !== undefined ? { contextWindow: record.contextWindow as number | null } : {}),
       ...(record.maxTokens !== undefined ? { maxTokens: record.maxTokens as number | null } : {}),
+      ...(compat !== undefined ? { compat } : {}),
     } satisfies ProviderModelOverrideLayer;
+  }
+  return parsed;
+}
+
+function parseCompatOverride(modelId: string, value: unknown, scope: string): CompatOverrideLayer | null {
+  const nullable = scope === "project";
+  if (value === null) {
+    if (!nullable) {
+      throw new Error(`modelOverrides.${modelId}.compat must be an object in ${scope} config file`);
+    }
+    return null;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`modelOverrides.${modelId}.compat must be an object in ${scope} config file`);
+  }
+
+  const record = value as Record<string, unknown>;
+  const unknown = Object.keys(record).filter(
+    (key) => !(COMPAT_OVERRIDE_FIELDS as readonly string[]).includes(key),
+  );
+  if (unknown.length > 0) {
+    throw new Error(
+      `modelOverrides.${modelId}.compat contains unsupported fields: ${unknown.join(", ")} (allowed: ${COMPAT_OVERRIDE_FIELDS.join(", ")})`,
+    );
+  }
+
+  const parsed: CompatOverrideLayer = {};
+  for (const field of COMPAT_OVERRIDE_FIELDS) {
+    const entry = record[field];
+    if (entry === undefined) continue;
+    if (typeof entry !== "boolean" && !(nullable && entry === null)) {
+      throw new Error(`modelOverrides.${modelId}.compat.${field} must be a boolean${nullable ? " or null" : ""} in ${scope} config file`);
+    }
+    parsed[field] = entry as boolean | null;
   }
   return parsed;
 }
@@ -289,8 +348,15 @@ export function saveModelOverride(
     ? {}
     : parseModelOverrides(raw.modelOverrides, "project");
   const next = { ...existing };
-  if (Object.keys(override).length === 0) delete next[modelId];
-  else next[modelId] = override;
+  // The inspector only edits bounded scalar fields; preserve any compat
+  // override maintained directly in the config file.
+  const existingCompat = existing[modelId]?.compat;
+  const mergedOverride: ProviderModelOverrideLayer = {
+    ...(existingCompat !== undefined ? { compat: existingCompat } : {}),
+    ...override,
+  };
+  if (Object.keys(mergedOverride).length === 0) delete next[modelId];
+  else next[modelId] = mergedOverride;
   writeConfigFile(path, { ...raw, modelOverrides: next } as ConfigLayer);
   return { path, overrides: next };
 }

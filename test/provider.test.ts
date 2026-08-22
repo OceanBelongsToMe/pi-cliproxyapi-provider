@@ -205,3 +205,22 @@ test("applies bounded user overrides without changing forced model API selection
   assert.equal(result.models[0].api, "openai-responses");
   assert.equal(result.models[0].thinkingLevelMap?.max, "max");
 });
+
+test("applies compat overrides to published model compatibility flags", () => {
+  const result = buildProviderModels(
+    [{ id: "qwen3.8-max" }],
+    {},
+    {},
+    "canonical",
+    {
+      "qwen3.8-max": {
+        compat: { supportsDeveloperRole: false, supportsReasoningEffort: false },
+      },
+    },
+  );
+
+  assert.deepEqual(result.models[0].compat, {
+    supportsDeveloperRole: false,
+    supportsReasoningEffort: false,
+  });
+});

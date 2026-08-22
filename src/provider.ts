@@ -144,6 +144,9 @@ function applyModelOverride(
     ...(override.reasoning !== undefined ? { reasoning: override.reasoning } : {}),
     ...(override.contextWindow !== undefined ? { contextWindow: override.contextWindow } : {}),
     ...(override.maxTokens !== undefined ? { maxTokens: override.maxTokens } : {}),
+    ...(override.compat !== undefined
+      ? { compat: { ...model.compat, ...override.compat } }
+      : {}),
   };
 }
 

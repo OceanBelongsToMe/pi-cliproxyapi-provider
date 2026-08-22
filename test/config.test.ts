@@ -216,3 +216,100 @@ test("rejects malformed config values with actionable errors", async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("merges compat overrides field by field and clears them with project nulls", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-cpa-config-compat-merge-"));
+  const path = join(dir, "config.json");
+  try {
+    await writeFile(path, JSON.stringify({
+      modelOverrides: {
+        qwen: {
+          compat: { supportsReasoningEffort: null, supportsUsageInStreaming: false },
+        },
+      },
+    }));
+    const config = mergeConfigLayers(
+      {
+        modelOverrides: {
+          qwen: {
+            compat: { supportsDeveloperRole: false, supportsReasoningEffort: false },
+          },
+        },
+      },
+      readProjectConfigFile(path),
+      {},
+    );
+
+    assert.deepEqual(config.modelOverrides, {
+      qwen: {
+        compat: { supportsDeveloperRole: false, supportsUsageInStreaming: false },
+      },
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("project null compat clears the whole compat override", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-cpa-config-compat-clear-"));
+  const path = join(dir, "config.json");
+  try {
+    await writeFile(path, JSON.stringify({
+      modelOverrides: { qwen: { compat: null } },
+    }));
+    const config = mergeConfigLayers(
+      {
+        modelOverrides: {
+          qwen: { reasoning: true, compat: { supportsDeveloperRole: false } },
+        },
+      },
+      readProjectConfigFile(path),
+      {},
+    );
+
+    assert.deepEqual(config.modelOverrides, { qwen: { reasoning: true } });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("rejects malformed compat overrides", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-cpa-config-compat-invalid-"));
+  const path = join(dir, "config.json");
+
+  try {
+    for (const modelOverrides of [
+      { model: { compat: "system" } },
+      { model: { compat: [] } },
+      { model: { compat: { supportsDeveloperRole: "no" } } },
+      { model: { compat: { supportsStrictMode: false } } },
+      { model: { compat: { madeUpFlag: true } } },
+      { model: { compat: null } },
+    ]) {
+      await writeFile(path, JSON.stringify({ modelOverrides }));
+      assert.throws(() => readConfigFile(path), /modelOverrides\.model\.compat/);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("saving bounded overrides preserves config-file compat overrides", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "pi-cpa-save-override-compat-"));
+  try {
+    const path = projectConfigPath(cwd);
+    await mkdir(join(cwd, ".pi", "pi-cliproxyapi-provider"), { recursive: true });
+    await writeFile(path, JSON.stringify({
+      modelOverrides: {
+        model: { compat: { supportsDeveloperRole: false } },
+      },
+    }));
+    saveModelOverride(cwd, "model", { maxTokens: 65536 });
+
+    assert.deepEqual(readProjectConfigFile(path)?.modelOverrides, {
+      model: { compat: { supportsDeveloperRole: false }, maxTokens: 65536 },
+    });
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
