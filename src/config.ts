@@ -14,7 +14,7 @@ import { COMPAT_OVERRIDE_FIELDS } from "./types.ts";
 
 export type ConfigLayer = Partial<CpaProviderConfig>;
 
-export const CONTEXT_WINDOW_PRESETS = [128000, 272000, 512000, 1000000] as const;
+export const CONTEXT_WINDOW_PRESETS = [128000, 272000, 400000, 512000, 1000000] as const;
 export const MAX_TOKEN_PRESETS = [4096, 8192, 16384, 32768, 65536, 128000] as const;
 
 export const DEFAULT_CONFIG: CpaProviderConfig = {
