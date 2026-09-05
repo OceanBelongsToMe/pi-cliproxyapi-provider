@@ -68,6 +68,10 @@ export interface ModelsDevMetadata {
   sourceProvider?: string;
   name?: string;
   reasoning?: boolean;
+  reasoning_options?: Array<{
+    type?: string;
+    values?: string[];
+  }>;
   modalities?: {
     input?: string[];
     output?: string[];

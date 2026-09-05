@@ -1,7 +1,7 @@
+import type { ThinkingLevelMap } from "@earendil-works/pi-ai";
 import type { CpaModel } from "./cpa.ts";
 import { findMetadataMatch, type MetadataMatchMethod } from "./matching.ts";
 import { getModelApiOverride, isGpt56Model, type ModelApiContext } from "./model-api.ts";
-import { getModelCapabilityOverrides } from "./model-capabilities.ts";
 import type { Gpt56ContextWindowMode } from "./settings.ts";
 import type {
   InputModality,
@@ -71,6 +71,23 @@ function contextWindowForModel(
   return GPT_5_6_CANONICAL_CONTEXT_WINDOW;
 }
 
+/**
+ * Derive Pi's thinking-level map from models.dev `reasoning_options`. Effort
+ * values are sent verbatim as `reasoning.effort`; levels the model does not
+ * list map to null so Pi hides them.
+ */
+const PI_THINKING_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
+function thinkingLevelMapFromMetadata(metadata: ModelsDevMetadata): ThinkingLevelMap | undefined {
+  const effort = metadata.reasoning_options?.find((option) => option.type === "effort");
+  if (!effort?.values?.length) return undefined;
+  const values = new Set(effort.values);
+  const map: ThinkingLevelMap = {};
+  for (const level of PI_THINKING_LEVELS) map[level] = values.has(level) ? level : null;
+  map.off = values.has("none") ? "none" : null;
+  return map;
+}
+
 function modelFromMetadata(
   cpaModel: CpaModel,
   metadata: ModelsDevMetadata,
@@ -80,17 +97,15 @@ function modelFromMetadata(
     availableModelId: cpaModel.id,
     metadataModelId: metadata.id,
   };
-  const capabilityOverrides = getModelCapabilityOverrides(capabilityContext);
   const api = getModelApiOverride(capabilityContext);
+  const thinkingLevelMap = thinkingLevelMapFromMetadata(metadata);
 
   return {
     id: cpaModel.id,
     name: metadata.name ?? cpaModel.id,
-    reasoning: capabilityOverrides.reasoning ?? metadata.reasoning ?? PI_MODEL_DEFAULTS.reasoning,
+    reasoning: metadata.reasoning ?? PI_MODEL_DEFAULTS.reasoning,
     ...(api ? { api } : {}),
-    ...(capabilityOverrides.thinkingLevelMap
-      ? { thinkingLevelMap: capabilityOverrides.thinkingLevelMap }
-      : {}),
+    ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
     input: inputFromMetadata(metadata),
     cost: costFromMetadata(metadata),
     contextWindow: contextWindowForModel(capabilityContext, metadata.limit?.context, gpt56ContextWindow),
@@ -108,14 +123,12 @@ function cloneModelDefaults(): typeof PI_MODEL_DEFAULTS {
 
 function defaultModel(cpaModel: CpaModel, gpt56ContextWindow: Gpt56ContextWindowMode): ProviderModelConfigLike {
   const modelContext = { availableModelId: cpaModel.id };
-  const capabilityOverrides = getModelCapabilityOverrides(modelContext);
   const api = getModelApiOverride(modelContext);
 
   return {
     id: cpaModel.id,
     name: cpaModel.id,
     ...cloneModelDefaults(),
-    ...capabilityOverrides,
     ...(api ? { api } : {}),
     contextWindow: contextWindowForModel(modelContext, undefined, gpt56ContextWindow),
   };

@@ -63,34 +63,63 @@ test("does not share mutable default objects between fallback models", () => {
   assert.equal(result.models[1].cost.input, 0);
 });
 
-test("adds the full thinking map to every GPT-5.6 model family member", () => {
-  const expectedThinkingLevelMap = {
+test("derives the thinking map from models.dev effort options", () => {
+  const result = buildProviderModels([
+    { id: "gpt-5.6-sol" },
+    { id: "gpt-6-astra" },
+  ], {
+    "openai/gpt-5.6-sol": {
+      id: "openai/gpt-5.6-sol",
+      reasoning: true,
+      reasoning_options: [{ type: "effort", values: ["none", "low", "medium", "high", "xhigh", "max"] }],
+    },
+    "openai/gpt-6-astra": {
+      id: "openai/gpt-6-astra",
+      reasoning: true,
+      reasoning_options: [{ type: "effort", values: ["low", "medium", "high", "xhigh", "max"] }],
+    },
+  }, {});
+
+  assert.deepEqual(result.models[0].thinkingLevelMap, {
     off: "none",
-    minimal: "minimal",
+    minimal: null,
     low: "low",
     medium: "medium",
     high: "high",
     xhigh: "xhigh",
     max: "max",
-  };
-  const result = buildProviderModels([
-    { id: "gpt-5.6-luna" },
-    { id: "0xdev/gpt-5.6-sol" },
-    { id: "gpt-5.6-terra" },
-  ], catalog, {});
-
-  for (const model of result.models) {
-    assert.equal(model.reasoning, true);
-    assert.deepEqual(model.thinkingLevelMap, expectedThinkingLevelMap);
-  }
+  });
+  assert.deepEqual(result.models[1].thinkingLevelMap, {
+    off: null,
+    minimal: null,
+    low: "low",
+    medium: "medium",
+    high: "high",
+    xhigh: "xhigh",
+    max: "max",
+  });
 });
 
-test("routes GPT-5.6 family models through the Responses API", () => {
+test("leaves the thinking map undefined without effort options", () => {
+  const result = buildProviderModels([
+    { id: "gpt-5.5" },
+    { id: "unknown-local" },
+  ], catalog, {});
+
+  assert.equal(result.models[0].reasoning, true);
+  assert.equal(result.models[0].thinkingLevelMap, undefined);
+  assert.equal(result.models[1].thinkingLevelMap, undefined);
+});
+
+test("routes GPT Responses family models through the Responses API", () => {
   const result = buildProviderModels([
     { id: "gpt-5.6" },
     { id: "gpt-5.6-codex" },
     { id: "0xdev/gpt-5.6-codex-mini" },
+    { id: "gpt-6" },
+    { id: "openai/gpt-6-astra" },
     { id: "gpt-5.60" },
+    { id: "gpt-60" },
     { id: "claude-opus-4-6" },
   ], {}, {});
 
@@ -98,6 +127,9 @@ test("routes GPT-5.6 family models through the Responses API", () => {
     "openai-responses",
     "openai-responses",
     "openai-responses",
+    "openai-responses",
+    "openai-responses",
+    undefined,
     undefined,
     undefined,
   ]);
@@ -164,6 +196,7 @@ test("recognizes GPT-5.6 through a canonical metadata alias", () => {
         id: "openai/gpt-5.6-luna",
         name: "GPT-5.6 Luna",
         reasoning: true,
+        reasoning_options: [{ type: "effort", values: ["none", "low", "medium", "high", "xhigh", "max"] }],
       },
     },
     { "custom-luna": "openai/gpt-5.6-luna" },
@@ -175,12 +208,12 @@ test("recognizes GPT-5.6 through a canonical metadata alias", () => {
   assert.equal(result.models[0].contextWindow, 272000);
 });
 
-test("adds GPT-5.6 capabilities even when metadata is unavailable", () => {
+test("routes GPT-5.6 family through the Responses API even when metadata is unavailable", () => {
   const result = buildProviderModels([{ id: "0xdev/gpt-5.6-luna" }], {}, {});
 
-  assert.equal(result.models[0].reasoning, true);
-  assert.equal(result.models[0].thinkingLevelMap?.off, "none");
-  assert.equal(result.models[0].thinkingLevelMap?.max, "max");
+  assert.equal(result.models[0].reasoning, false);
+  assert.equal(result.models[0].thinkingLevelMap, undefined);
+  assert.equal(result.models[0].api, "openai-responses");
   assert.equal(result.models[0].contextWindow, 272000);
 });
 
@@ -203,7 +236,6 @@ test("applies bounded user overrides without changing forced model API selection
   assert.equal(result.models[0].contextWindow, 512000);
   assert.equal(result.models[0].maxTokens, 32768);
   assert.equal(result.models[0].api, "openai-responses");
-  assert.equal(result.models[0].thinkingLevelMap?.max, "max");
 });
 
 test("applies compat overrides to published model compatibility flags", () => {
