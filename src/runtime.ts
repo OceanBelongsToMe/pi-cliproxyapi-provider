@@ -48,7 +48,7 @@ export class ProviderRuntime {
     const keyFn: () => Promise<string | undefined> = credential?.type === "api_key"
       ? async () => credential.key
       : () => getDiscoveryApiKey(this.options.config.providerName);
-    const result = await this.options.catalog.refresh("models", mode, keyFn, context.signal);
+    const result = await this.options.catalog.refresh("all", mode, keyFn, context.signal);
     // Pi publishes refreshModels' return value synchronously. Registering here as
     // well would create a second, competing catalog publication.
     return normalizeProviderModels(

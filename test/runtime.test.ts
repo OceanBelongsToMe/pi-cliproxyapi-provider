@@ -61,11 +61,11 @@ test("runtime registers cached models immediately and refreshes without reload",
   assert.equal(registrations[1].provider.models[0].compat.supportsStrictMode, false);
 });
 
-test("runtime refreshModels invokes a models-only catalog refresh with network when allowNetwork is true", async () => {
+test("runtime refreshModels invokes a full catalog refresh with network when allowNetwork is true", async () => {
   const catalog = {
     load: async () => snapshot("cached"),
     refresh: async (target: string, mode: string, _getApiKey: any, signal?: AbortSignal) => {
-      assert.equal(target, "models");
+      assert.equal(target, "all");
       assert.equal(mode, "background");
       if (signal?.aborted) throw signal.reason;
       const refreshed = snapshot("network-fresh");
@@ -74,7 +74,7 @@ test("runtime refreshModels invokes a models-only catalog refresh with network w
       return {
         snapshot: refreshed,
         models: { attempted: true, updated: true, changed: true },
-        metadata: { attempted: false, updated: false, changed: false },
+        metadata: { attempted: true, updated: true, changed: false },
       };
     },
   };
