@@ -5,11 +5,12 @@ import { dirname, join } from "node:path";
 export const PROVIDER_SETTINGS_NAMESPACE = "pi-cliproxyapi-provider";
 
 export type Gpt56ContextWindowMode = "canonical" | "full";
+export type FastMode = "off" | "fast" | "ultrafast";
 
 export interface ProviderSettings {
   gpt56ContextWindow: Gpt56ContextWindowMode;
   showStrictMode: boolean;
-  fastMode?: boolean;
+  fastMode?: FastMode;
 }
 
 export const DEFAULT_PROVIDER_SETTINGS: ProviderSettings = {
@@ -35,8 +36,8 @@ function parseSettingsLayer(settings: unknown, scope: string): Partial<ProviderS
   if (record.showStrictMode !== undefined && typeof record.showStrictMode !== "boolean") {
     throw new Error(`${PROVIDER_SETTINGS_NAMESPACE}.showStrictMode must be a boolean in ${scope} settings.json`);
   }
-  if (record.fastMode !== undefined && typeof record.fastMode !== "boolean") {
-    throw new Error(`${PROVIDER_SETTINGS_NAMESPACE}.fastMode must be a boolean in ${scope} settings.json`);
+  if (record.fastMode !== undefined && record.fastMode !== "off" && record.fastMode !== "fast" && record.fastMode !== "ultrafast") {
+    throw new Error(`${PROVIDER_SETTINGS_NAMESPACE}.fastMode must be "off", "fast", or "ultrafast" in ${scope} settings.json`);
   }
   return {
     ...(record.fastMode !== undefined ? { fastMode: record.fastMode } : {}),

@@ -148,7 +148,7 @@ test("manual refresh uses the active model registry credential", async () => {
   }
 });
 
-test("Fast toggles priority requests without changing reasoning or adding agent workflows", async () => {
+test("Fast mode selects priority or ultrafast without changing reasoning or adding agent workflows", async () => {
   const home = await mkdtemp(join(tmpdir(), "pi-cpa-modes-home-"));
   const originalHome = process.env.HOME;
   try {
@@ -179,19 +179,31 @@ test("Fast toggles priority requests without changing reasoning or adding agent 
       assert.equal(hooks.get("before_provider_request")(request, ctx), undefined);
       assert.equal(hooks.has("before_agent_start"), false);
 
-      await commands.get("fast")("on", ctx);
+      await commands.get("fast")("fast", ctx);
       assert.equal(hooks.get("before_provider_request")(request, ctx).service_tier, "priority");
       assert.equal(thinking, "high");
       assert.deepEqual(hooks.get("before_provider_request")(request, ctx).reasoning, { effort: "high" });
       assert.deepEqual(request.payload, { model: ctx.model.id, reasoning: { effort: "high" } });
       await commands.get("fast")("status", ctx);
-      assert.match(notices.at(-1)!, /on/);
+      assert.match(notices.at(-1)!, /fast/);
+      await commands.get("fast")("ultrafast", ctx);
+      assert.deepEqual(hooks.get("before_provider_request")(request, ctx), {
+        ...request.payload, service_tier: "ultrafast",
+      });
+      await commands.get("fast")("status", ctx);
+      assert.match(notices.at(-1)!, /ultrafast/);
+      await commands.get("fast")("invalid", ctx);
+      assert.equal(hooks.get("before_provider_request")(request, ctx).service_tier, "ultrafast");
+      await commands.get("fast")("", ctx);
+      assert.equal(hooks.get("before_provider_request")(request, ctx), undefined);
+      await commands.get("fast")("", ctx);
+      assert.equal(hooks.get("before_provider_request")(request, ctx).service_tier, "priority");
       await commands.get("fast")("off", ctx);
       assert.equal(hooks.get("before_provider_request")(request, ctx), undefined);
       assert.equal(thinking, "high");
       await commands.get("fast")("invalid", ctx);
       assert.match(notices.at(-1)!, /Usage/);
-      await commands.get("fast")("on", ctx);
+      await commands.get("fast")("ultrafast", ctx);
       const other = { ...ctx, model: { ...ctx.model, provider: "openai" } };
       assert.equal(hooks.get("before_provider_request")(request, other), undefined);
       const completions = { ...ctx, model: { ...ctx.model, api: "openai-completions" } };
@@ -199,7 +211,14 @@ test("Fast toggles priority requests without changing reasoning or adding agent 
       assert.equal(hooks.get("before_provider_request")({ payload: null }, ctx), undefined);
       assert.equal(thinking, "high");
       const settings = JSON.parse(await readFile(join(cwd, ".pi", "settings.json"), "utf8"));
-      assert.equal(settings["pi-cliproxyapi-provider"].fastMode, true);
+      assert.equal(settings["pi-cliproxyapi-provider"].fastMode, "ultrafast");
+      await extension({
+        registerCommand: () => {},
+        registerProvider: () => {},
+        on: (name: string, handler: any) => hooks.set(name, handler),
+      } as any);
+      assert.equal(hooks.get("before_provider_request")(request, ctx).service_tier, "ultrafast");
+      assert.deepEqual(request.payload, { model: ctx.model.id, reasoning: { effort: "high" } });
     });
   } finally {
     if (originalHome === undefined) delete process.env.HOME;

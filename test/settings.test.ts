@@ -29,16 +29,16 @@ test("uses the canonical GPT-5.6 context window by default", async () => {
 test("project settings override the global GPT-5.6 context window mode", async () => {
   await withSettingsTree(async (cwd, agentDir) => {
     await writeFile(join(agentDir, "settings.json"), JSON.stringify({
-      [namespace]: { gpt56ContextWindow: "canonical", showStrictMode: false, fastMode: true },
+      [namespace]: { gpt56ContextWindow: "canonical", showStrictMode: false, fastMode: "fast" },
     }));
     await writeFile(join(cwd, ".pi", "settings.json"), JSON.stringify({
-      [namespace]: { gpt56ContextWindow: "full", showStrictMode: true, fastMode: false },
+      [namespace]: { gpt56ContextWindow: "full", showStrictMode: true, fastMode: "off" },
     }));
 
     const settings = loadProviderSettings(cwd, agentDir);
     assert.equal(settings.gpt56ContextWindow, "full");
     assert.equal(settings.showStrictMode, true);
-    assert.equal(settings.fastMode, false);
+    assert.equal(settings.fastMode, "off");
   });
 });
 
@@ -55,12 +55,24 @@ test("saves package settings to the existing project settings file", async () =>
   });
 });
 
+test("saves and loads every fast mode", async () => {
+  await withSettingsTree(async (cwd, agentDir) => {
+    await writeFile(join(cwd, ".pi", "settings.json"), "{}");
+    for (const fastMode of ["off", "fast", "ultrafast"] as const) {
+      saveProviderSettings(cwd, { fastMode });
+      assert.equal(loadProviderSettings(cwd, agentDir).fastMode, fastMode);
+    }
+  });
+});
+
 test("rejects unsupported provider settings", async () => {
   await withSettingsTree(async (cwd, agentDir) => {
     for (const providerSettings of [
       { gpt56ContextWindow: "unbounded" },
       { showStrictMode: "yes" },
       { fastMode: "yes" },
+      { fastMode: true },
+      { fastMode: false },
     ]) {
       await writeFile(join(agentDir, "settings.json"), JSON.stringify({
         [namespace]: providerSettings,

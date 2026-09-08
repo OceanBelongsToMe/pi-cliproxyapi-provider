@@ -39,5 +39,5 @@ export default async function (pi: ExtensionAPI) {
     pi.registerProvider(config.providerName, buildProviderRegistration(config, buildUnavailableProviderModels()).config);
     console.warn(`[pi-cliproxyapi-provider] registered placeholder provider after startup failure: ${error instanceof Error ? error.message : String(error)}`);
   }
-  registerFastMode(pi, config.providerName, settings.fastMode === true);
+  registerFastMode(pi, config.providerName, settings.fastMode ?? "off");
 }

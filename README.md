@@ -113,19 +113,19 @@ Run `/cliproxyapi config` in Pi TUI mode to edit model and display settings. Fas
 
 ### Fast mode
 
-Use `/fast on`, `/fast off`, or `/fast status`; `/fast` toggles the mode. The command takes effect immediately and persists `pi-cliproxyapi-provider.fastMode` in the existing project `settings.json`, or global settings when no project settings file exists. The default is off. For example:
+Use `/fast fast`, `/fast ultrafast`, `/fast off`, or `/fast status`; `/fast` switches off to fast and either enabled mode to off. The command takes effect immediately and persists `pi-cliproxyapi-provider.fastMode` in the existing project `settings.json`, or global settings when no project settings file exists. Allowed values are `"off"`, `"fast"`, and `"ultrafast"`; the default is off. For example:
 
 ```json
 {
   "pi-cliproxyapi-provider": {
-    "fastMode": true
+    "fastMode": "ultrafast"
   }
 }
 ```
 
-When enabled, CPA `openai-responses` requests send `service_tier: "priority"`. Other providers and APIs are unchanged; the status line reports when Fast is inactive for the selected model. Upstream support and pricing still apply. Reload Pi after manually editing settings.
+For CPA `openai-responses` requests, `fast` sends `service_tier: "priority"` and `ultrafast` sends `service_tier: "ultrafast"`. Other providers and APIs are unchanged; the status line reports when the mode is inactive for the selected model. The selected tier requires support from the proxy route, upstream model, and account; sending it does not guarantee it is honored. CLIProxyAPI's current Codex translation removes non-priority tiers. Upstream pricing still applies. Reload Pi after manually editing settings.
 
-Fast does not change reasoning effort, route models, or launch subagents. There is no Ultra or Ultrafast mode in this package. Disable other service-tier extensions when using this setting to avoid conflicting request overrides.
+Neither mode changes reasoning effort, routes models, or launches subagents. Disable other service-tier extensions when using this setting to avoid conflicting request overrides.
 
 ## Authenticate
 
