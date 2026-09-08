@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import extension from "../extensions/index.ts";
@@ -117,7 +117,7 @@ test("manual refresh uses the active model registry credential", async () => {
       }) as typeof fetch;
 
       await extension({
-        registerCommand: (_name: string, options: any) => { commandHandler = options.handler; },
+        registerCommand: (name: string, options: any) => { if (name === "cliproxyapi") commandHandler = options.handler; },
         registerProvider: () => {},
         on: () => {},
       } as any);
@@ -142,6 +142,66 @@ test("manual refresh uses the active model registry credential", async () => {
     });
   } finally {
     globalThis.fetch = originalFetch;
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("Fast toggles priority requests without changing reasoning or adding agent workflows", async () => {
+  const home = await mkdtemp(join(tmpdir(), "pi-cpa-modes-home-"));
+  const originalHome = process.env.HOME;
+  try {
+    process.env.HOME = home;
+    await withTempCwd(async (cwd) => {
+      await mkdir(join(cwd, ".pi"));
+      await writeFile(join(cwd, ".pi", "settings.json"), "{}");
+      const commands = new Map<string, any>();
+      const hooks = new Map<string, any>();
+      const notices: string[] = [];
+      let thinking = "high";
+      await extension({
+        registerCommand: (name: string, options: any) => commands.set(name, options.handler),
+        registerProvider: () => {},
+        on: (name: string, handler: any) => hooks.set(name, handler),
+        getThinkingLevel: () => thinking,
+        setThinkingLevel: (level: string) => { thinking = level; },
+      } as any);
+      const ctx = {
+        cwd, hasUI: true,
+        model: { provider: "cpa", id: "gpt-6-astra", api: "openai-responses", reasoning: true },
+        ui: { notify: (text: string) => notices.push(text), setStatus: () => {} },
+      };
+      assert.ok(commands.has("fast"), "Fast command must be registered");
+      assert.equal(commands.has("ultra"), false);
+      await hooks.get("session_start")({}, ctx);
+      const request = { payload: { model: ctx.model.id, reasoning: { effort: "high" } } };
+      assert.equal(hooks.get("before_provider_request")(request, ctx), undefined);
+      assert.equal(hooks.has("before_agent_start"), false);
+
+      await commands.get("fast")("on", ctx);
+      assert.equal(hooks.get("before_provider_request")(request, ctx).service_tier, "priority");
+      assert.equal(thinking, "high");
+      assert.deepEqual(hooks.get("before_provider_request")(request, ctx).reasoning, { effort: "high" });
+      assert.deepEqual(request.payload, { model: ctx.model.id, reasoning: { effort: "high" } });
+      await commands.get("fast")("status", ctx);
+      assert.match(notices.at(-1)!, /on/);
+      await commands.get("fast")("off", ctx);
+      assert.equal(hooks.get("before_provider_request")(request, ctx), undefined);
+      assert.equal(thinking, "high");
+      await commands.get("fast")("invalid", ctx);
+      assert.match(notices.at(-1)!, /Usage/);
+      await commands.get("fast")("on", ctx);
+      const other = { ...ctx, model: { ...ctx.model, provider: "openai" } };
+      assert.equal(hooks.get("before_provider_request")(request, other), undefined);
+      const completions = { ...ctx, model: { ...ctx.model, api: "openai-completions" } };
+      assert.equal(hooks.get("before_provider_request")(request, completions), undefined);
+      assert.equal(hooks.get("before_provider_request")({ payload: null }, ctx), undefined);
+      assert.equal(thinking, "high");
+      const settings = JSON.parse(await readFile(join(cwd, ".pi", "settings.json"), "utf8"));
+      assert.equal(settings["pi-cliproxyapi-provider"].fastMode, true);
+    });
+  } finally {
     if (originalHome === undefined) delete process.env.HOME;
     else process.env.HOME = originalHome;
     await rm(home, { recursive: true, force: true });

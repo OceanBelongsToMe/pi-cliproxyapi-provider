@@ -98,7 +98,7 @@ Use `"full"` only when the selected CLIProxyAPI route and upstream account actua
 
 ### Model and display configuration
 
-Run `/cliproxyapi config` in Pi TUI mode to edit every package-level `settings.json` value. The tabbed panel has `Connection`, `Models`, and `Display` sections; it controls the GPT-5.6 context-window mode and whether the model selector shows the published strict tool-schema capability.
+Run `/cliproxyapi config` in Pi TUI mode to edit model and display settings. Fast mode is controlled separately with `/fast`. The tabbed panel has `Connection`, `Models`, and `Display` sections; it controls the GPT-5.6 context-window mode and whether the model selector shows the published strict tool-schema capability.
 
 ```json
 {
@@ -110,6 +110,22 @@ Run `/cliproxyapi config` in Pi TUI mode to edit every package-level `settings.j
 ```
 
 `showStrictMode` defaults to `false` because the selector stays compact for normal use. Enable it when diagnosing tool-schema behavior; model details always show `Strict tool schema` explicitly. Saving through `/cliproxyapi config` reloads Pi. Select `Connection` to open the endpoint and authentication editor.
+
+### Fast mode
+
+Use `/fast on`, `/fast off`, or `/fast status`; `/fast` toggles the mode. The command takes effect immediately and persists `pi-cliproxyapi-provider.fastMode` in the existing project `settings.json`, or global settings when no project settings file exists. The default is off. For example:
+
+```json
+{
+  "pi-cliproxyapi-provider": {
+    "fastMode": true
+  }
+}
+```
+
+When enabled, CPA `openai-responses` requests send `service_tier: "priority"`. Other providers and APIs are unchanged; the status line reports when Fast is inactive for the selected model. Upstream support and pricing still apply. Reload Pi after manually editing settings.
+
+Fast does not change reasoning effort, route models, or launch subagents. There is no Ultra or Ultrafast mode in this package. Disable other service-tier extensions when using this setting to avoid conflicting request overrides.
 
 ## Authenticate
 

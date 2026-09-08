@@ -29,15 +29,16 @@ test("uses the canonical GPT-5.6 context window by default", async () => {
 test("project settings override the global GPT-5.6 context window mode", async () => {
   await withSettingsTree(async (cwd, agentDir) => {
     await writeFile(join(agentDir, "settings.json"), JSON.stringify({
-      [namespace]: { gpt56ContextWindow: "canonical", showStrictMode: false },
+      [namespace]: { gpt56ContextWindow: "canonical", showStrictMode: false, fastMode: true },
     }));
     await writeFile(join(cwd, ".pi", "settings.json"), JSON.stringify({
-      [namespace]: { gpt56ContextWindow: "full", showStrictMode: true },
+      [namespace]: { gpt56ContextWindow: "full", showStrictMode: true, fastMode: false },
     }));
 
     const settings = loadProviderSettings(cwd, agentDir);
     assert.equal(settings.gpt56ContextWindow, "full");
     assert.equal(settings.showStrictMode, true);
+    assert.equal(settings.fastMode, false);
   });
 });
 
@@ -59,6 +60,7 @@ test("rejects unsupported provider settings", async () => {
     for (const providerSettings of [
       { gpt56ContextWindow: "unbounded" },
       { showStrictMode: "yes" },
+      { fastMode: "yes" },
     ]) {
       await writeFile(join(agentDir, "settings.json"), JSON.stringify({
         [namespace]: providerSettings,

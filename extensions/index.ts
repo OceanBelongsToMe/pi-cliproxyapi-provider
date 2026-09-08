@@ -8,7 +8,8 @@ import { buildProviderRegistration } from "../src/registration.ts";
 import { buildUnavailableProviderModels } from "../src/provider.ts";
 import { registerCliproxyapiCommand } from "../src/commands.ts";
 import { getDiscoveryApiKey } from "../src/auth.ts";
-import { loadProviderSettings } from "../src/settings.ts";
+import { DEFAULT_PROVIDER_SETTINGS, loadProviderSettings } from "../src/settings.ts";
+import { registerFastMode } from "../src/fast-mode.ts";
 import { registerCodexCompatiblePayloadAdapter } from "../src/codex-compat.ts";
 
 const extensionDir = dirname(fileURLToPath(import.meta.url));
@@ -17,10 +18,11 @@ const bundledModelsDevPath = join(packageRoot, "data", "models-dev-fallback.json
 
 export default async function (pi: ExtensionAPI) {
   let config = DEFAULT_CONFIG;
+  let settings = DEFAULT_PROVIDER_SETTINGS;
   try {
     const cwd = process.cwd();
     config = loadConfig(cwd);
-    const settings = loadProviderSettings(cwd);
+    settings = loadProviderSettings(cwd);
     const catalog = new ProviderCatalog({
       config,
       gpt56ContextWindow: settings.gpt56ContextWindow,
@@ -37,4 +39,5 @@ export default async function (pi: ExtensionAPI) {
     pi.registerProvider(config.providerName, buildProviderRegistration(config, buildUnavailableProviderModels()).config);
     console.warn(`[pi-cliproxyapi-provider] registered placeholder provider after startup failure: ${error instanceof Error ? error.message : String(error)}`);
   }
+  registerFastMode(pi, config.providerName, settings.fastMode === true);
 }
