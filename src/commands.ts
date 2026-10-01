@@ -186,12 +186,42 @@ export function registerCliproxyapiCommand(pi: ExtensionAPI, runtime?: ProviderR
           ? undefined
           : () => ctx.modelRegistry.getApiKeyForProvider(config.providerName);
         const result = await runtime.refresh(target, "manual", getDiscoveryApiKey);
-        const level = result.models.error || result.metadata.error ? "warning" : "info";
+        const warnings: string[] = [];
+        if (result.models.updated || result.metadata.updated) {
+          try {
+            const restored = await ctx.modelRegistry.refresh({ providers: [config.providerName], allowNetwork: false });
+            if (restored.aborted) warnings.push("Pi registry restore aborted.");
+            for (const [provider, error] of restored.errors) {
+              warnings.push(`Pi registry restore failed (${provider}): ${errorText(error)}`);
+            }
+          } catch (error) {
+            warnings.push(`Pi registry restore failed: ${errorText(error)}`);
+          }
+          const current = ctx.model;
+          if (current?.provider === config.providerName) {
+            const latest = ctx.modelRegistry.find(config.providerName, current.id);
+            if (!latest) {
+              warnings.push(`Selected model ${config.providerName}/${current.id} is missing from Pi's registry; the current selection is stale. Choose a model with /model.`);
+            } else {
+              try {
+                if (!await pi.setModel(latest)) {
+                  warnings.push("Current model selection refresh failed: authentication is not configured; the selection may be stale. Use /login and /model.");
+                }
+              } catch (error) {
+                warnings.push(`Current model selection refresh failed: ${errorText(error)}; the selection may be stale. Use /model.`);
+              }
+            }
+          }
+        }
+        const level = result.models.error || result.metadata.error || warnings.length ? "warning" : "info";
+        const registered = ctx.modelRegistry.getAll().filter((model) => model.provider === config.providerName);
         ctx.ui.notify([
-          "CLIProxyAPI provider refresh complete.",
+          "CLIProxyAPI refresh results.",
           refreshPart("CPA models", result.models),
           refreshPart("models.dev metadata", result.metadata),
-          `Registered: ${result.snapshot.built.stats.total} models, ${result.snapshot.built.stats.enriched} enriched, ${result.snapshot.built.stats.unmatched} unmatched.`,
+          `Catalog: ${result.snapshot.built.stats.total} models, ${result.snapshot.built.stats.enriched} enriched, ${result.snapshot.built.stats.unmatched} unmatched.`,
+          ...warnings,
+          `Pi registry now: ${registered.length} models for ${config.providerName}.`,
         ].join("\n"), level);
         return;
       }

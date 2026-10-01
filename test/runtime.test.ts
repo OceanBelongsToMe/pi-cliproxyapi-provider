@@ -34,33 +34,6 @@ function snapshot(id: string, reasoning = false): any {
   };
 }
 
-test("runtime registers cached models immediately and refreshes without reload", async () => {
-  const registrations: any[] = [];
-  const catalog = {
-    load: async () => snapshot("cached"),
-    refresh: async () => ({
-      snapshot: snapshot("fresh", true),
-      models: { attempted: true, updated: true, changed: true },
-      metadata: { attempted: false, updated: false, changed: false },
-    }),
-  };
-  const runtime = new ProviderRuntime({
-    pi: { registerProvider: (name: string, provider: any) => registrations.push({ name, provider }) } as any,
-    config,
-    catalog: catalog as any,
-  });
-
-  await runtime.start();
-  await runtime.refresh("models", "background");
-
-  assert.equal(registrations.length, 2);
-  assert.equal(registrations[0].provider.models[0].id, "cached");
-  assert.equal(registrations[0].provider.models[0].compat.supportsStrictMode, false);
-  assert.equal(registrations[1].provider.models[0].id, "fresh");
-  assert.equal(registrations[1].provider.models[0].reasoning, true);
-  assert.equal(registrations[1].provider.models[0].compat.supportsStrictMode, false);
-});
-
 test("runtime refreshModels invokes a full catalog refresh with network when allowNetwork is true", async () => {
   const catalog = {
     load: async () => snapshot("cached"),

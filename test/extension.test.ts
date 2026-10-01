@@ -4,6 +4,8 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import extension from "../extensions/index.ts";
+import { InMemoryCredentialStore, InMemoryModelsStore } from "@earendil-works/pi-ai";
+import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 
 async function withTempCwd<T>(fn: (cwd: string) => Promise<T>): Promise<T> {
   const cwd = await mkdtemp(join(tmpdir(), "pi-cpa-extension-"));
@@ -116,27 +118,29 @@ test("manual refresh uses the active model registry credential", async () => {
         return new Response(JSON.stringify({ data: [{ id: "fresh-model" }] }), { status: 200 });
       }) as typeof fetch;
 
+      const registry = new ModelRegistry(await ModelRuntime.create({
+        credentials: new InMemoryCredentialStore(), modelsStore: new InMemoryModelsStore(),
+        modelsPath: null, refreshOnCreate: false,
+      }));
       await extension({
         registerCommand: (name: string, options: any) => { if (name === "cliproxyapi") commandHandler = options.handler; },
-        registerProvider: () => {},
+        registerProvider: registry.registerProvider.bind(registry),
         on: () => {},
       } as any);
+      await registry.runtime.setRuntimeApiKey("cpa", "runtime-key");
+      await registry.refresh({ providers: ["cpa"], allowNetwork: false });
 
       const notifications: Array<{ message: string; level: string }> = [];
       await commandHandler?.("refresh models", {
         cwd,
-        modelRegistry: {
-          getApiKeyForProvider: async (providerName: string) => {
-            assert.equal(providerName, "cpa");
-            return "runtime-key";
-          },
-        },
+        modelRegistry: registry,
         ui: {
           notify: (message: string, level: string) => notifications.push({ message, level }),
         },
       });
 
       assert.equal(receivedAuthorization, "Bearer runtime-key");
+      assert.ok(registry.find("cpa", "fresh-model"));
       assert.equal(notifications.at(-1)?.level, "info");
       assert.doesNotMatch(notifications.at(-1)?.message ?? "", /401 Unauthorized/);
     });
@@ -169,7 +173,7 @@ test("Fast mode selects priority or ultrafast without changing reasoning or addi
       } as any);
       const ctx = {
         cwd, hasUI: true,
-        model: { provider: "cpa", id: "gpt-6-astra", api: "openai-responses", reasoning: true },
+        model: { provider: "cpa", id: "gpt-6.1-sol", api: "openai-completions", reasoning: true },
         ui: { notify: (text: string) => notices.push(text), setStatus: () => {} },
       };
       assert.ok(commands.has("fast"), "Fast command must be registered");
@@ -206,8 +210,8 @@ test("Fast mode selects priority or ultrafast without changing reasoning or addi
       await commands.get("fast")("ultrafast", ctx);
       const other = { ...ctx, model: { ...ctx.model, provider: "openai" } };
       assert.equal(hooks.get("before_provider_request")(request, other), undefined);
-      const completions = { ...ctx, model: { ...ctx.model, api: "openai-completions" } };
-      assert.equal(hooks.get("before_provider_request")(request, completions), undefined);
+      const nonGpt = { ...ctx, model: { ...ctx.model, id: "claude-opus-4-6" } };
+      assert.equal(hooks.get("before_provider_request")(request, nonGpt), undefined);
       assert.equal(hooks.get("before_provider_request")({ payload: null }, ctx), undefined);
       assert.equal(thinking, "high");
       const settings = JSON.parse(await readFile(join(cwd, ".pi", "settings.json"), "utf8"));

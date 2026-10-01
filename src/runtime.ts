@@ -13,7 +13,6 @@ export interface ProviderRuntimeOptions {
 }
 
 export class ProviderRuntime {
-  private registeredFingerprint?: string;
   private readonly options: ProviderRuntimeOptions;
 
   constructor(options: ProviderRuntimeOptions) {
@@ -22,7 +21,9 @@ export class ProviderRuntime {
 
   async start(): Promise<CatalogSnapshot> {
     const snapshot = await this.options.catalog.load();
-    this.register(snapshot, true);
+    const models = snapshot.built.models.length > 0 ? snapshot.built.models : buildUnavailableProviderModels();
+    const registration = buildProviderRegistration(this.options.config, models, (ctx) => this.refreshModels(ctx));
+    this.options.pi.registerProvider(registration.providerName, registration.config);
     return snapshot;
   }
 
@@ -31,9 +32,7 @@ export class ProviderRuntime {
     mode: "background" | "manual" = "manual",
     getDiscoveryApiKey?: () => Promise<string | undefined>,
   ): Promise<CatalogRefreshResult> {
-    const result = await this.options.catalog.refresh(target, mode, getDiscoveryApiKey);
-    if (result.models.updated || result.metadata.updated) this.register(result.snapshot, false);
-    return result;
+    return this.options.catalog.refresh(target, mode, getDiscoveryApiKey);
   }
 
   async refreshModels(context: RefreshModelsContext): Promise<ProviderModelConfig[]> {
@@ -56,14 +55,5 @@ export class ProviderRuntime {
         ? result.snapshot.built.models
         : buildUnavailableProviderModels(),
     );
-  }
-
-  private register(snapshot: CatalogSnapshot, force: boolean): void {
-    const models = snapshot.built.models.length > 0 ? snapshot.built.models : buildUnavailableProviderModels();
-    const fingerprint = JSON.stringify(models);
-    if (!force && fingerprint === this.registeredFingerprint) return;
-    const registration = buildProviderRegistration(this.options.config, models, (ctx) => this.refreshModels(ctx));
-    this.options.pi.registerProvider(registration.providerName, registration.config);
-    this.registeredFingerprint = fingerprint;
   }
 }

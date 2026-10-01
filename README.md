@@ -4,6 +4,8 @@
 
 ## Install
 
+Requires Pi **0.85.1 or newer**.
+
 Install from npm:
 
 ```bash
@@ -123,7 +125,7 @@ Use `/fast fast`, `/fast ultrafast`, `/fast off`, or `/fast status`; `/fast` swi
 }
 ```
 
-For CPA `openai-responses` requests, `fast` sends `service_tier: "priority"` and `ultrafast` sends `service_tier: "ultrafast"`. Other providers and APIs are unchanged; the status line reports when the mode is inactive for the selected model. The selected tier requires support from the proxy route, upstream model, and account; sending it does not guarantee it is honored. CLIProxyAPI's current Codex translation removes non-priority tiers. Upstream pricing still applies. Reload Pi after manually editing settings.
+For CPA GPT models, `fast` sends `service_tier: "priority"` and `ultrafast` sends `service_tier: "ultrafast"` on both OpenAI-compatible APIs. Other providers and non-GPT models are unchanged; the status line reports when the mode is inactive for the selected model. The selected tier requires support from the proxy route, upstream model, and account; sending it does not guarantee it is honored. CLIProxyAPI's current Codex translation removes non-priority tiers. Upstream pricing still applies. Reload Pi after manually editing settings.
 
 Neither mode changes reasoning effort, routes models, or launches subagents. Disable other service-tier extensions when using this setting to avoid conflicting request overrides.
 
@@ -241,7 +243,11 @@ Snapshots live under:
 
 Startup registers the provider immediately from the last-known-good local snapshots. It then refreshes CLIProxyAPI availability in the background with a short timeout and updates the provider dynamically if the model list changed. On a first run, Pi registers a placeholder until background discovery succeeds. Startup never fetches `models.dev`; it uses the persistent local metadata snapshot or `data/models-dev-fallback.json` when no snapshot exists.
 
-Manual refreshes update the running provider immediately; `/reload` is not required. Failed refreshes retain the last-known-good data independently for each source.
+Manual refreshes update the requested local snapshots, then ask Pi to restore only this provider from those snapshots without another network request or provider re-registration; `/reload` is not required. Successful fetches trigger restoration even when their content is unchanged. Failed source refreshes retain the last-known-good snapshot independently for each source.
+
+The command reports catalog outcomes separately from the model count currently observed in Pi's registry. Restoration errors or cancellation are reported: Pi can reset this provider to its startup registration on failure, and a concurrent refresh can supersede restoration. The report is not a receipt for a particular catalog generation.
+
+If the current CPA model ID still exists after restoration, the command reselects its current registry definition so the session uses updated limits and capabilities. Pi may clamp the thinking level; startup model/thinking defaults are unchanged. If the model is missing or reselection fails, the command warns about the stale selection rather than choosing a different model.
 
 A scheduled GitHub Actions workflow checks the bundled fallback catalog daily. When it changes, the workflow validates the package, bumps the patch version, commits the update, and starts the normal release workflow. Maintainers can also update the catalog locally with:
 

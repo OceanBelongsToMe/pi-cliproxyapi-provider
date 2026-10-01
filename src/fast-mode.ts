@@ -1,9 +1,15 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { saveProviderSettings, type FastMode } from "./settings.ts";
 
+function isGptModel(id: string): boolean {
+  const name = id.slice(id.lastIndexOf("/") + 1).trim().toLowerCase();
+  return name === "gpt" || name.startsWith("gpt-");
+}
+
 export function registerFastMode(pi: ExtensionAPI, providerName: string, mode: FastMode): void {
   function supportsFast(ctx: ExtensionContext): boolean {
-    return ctx.model?.provider === providerName && ctx.model.api === "openai-responses";
+    const model = ctx.model;
+    return model?.provider === providerName && isGptModel(model.id);
   }
 
   function status(ctx: ExtensionContext): string {
